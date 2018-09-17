@@ -5,13 +5,22 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import com.godlike.algorithm.configure.SystemConfigure;
 import com.godlike.algorithm.exception.MyException;
+import com.godlike.algorithm.model.CraneTask;
 import com.godlike.algorithm.model.RowInfo;
 import com.godlike.algorithm.model.StorageTask;
 
+/**
+ * @author godlike
+ *
+ */
 public class Situation {
 	private Connection conn;
 	
@@ -27,10 +36,11 @@ public class Situation {
 	
 	/**
 	 * @param storageTasks 可同时输入多个仓储相关任务
-	 * @return 完善后的任务，自动补充了起点终点等，计划任务之后对row进行锁定
+	 * @return 完善后的天车任务，自动补充了起点终点等，计划任务之后对row进行锁定
 	 * @throws Exception
 	 */
-	public List<StorageTask> storageTaskMakeUp(List<StorageTask> storageTasks) throws Exception{
+	public List<CraneTask> storageTaskMakeUp(List<StorageTask> storageTasks) throws Exception{
+		List<CraneTask> craneTasks=new ArrayList<>();
 		for(StorageTask stask:storageTasks) {
 			boolean ifInput;
 			boolean ifRaw;
@@ -86,8 +96,7 @@ public class Situation {
 				ifRaw=false;
 				ifInput=false;
 			}
-			RowInfo tmpRow;
-			tmpRow=getBreakPosition(ifRaw, warehouse, stask.getcType().name(),ifInput);
+			RowInfo tmpRow=getBreakPosition(ifRaw, warehouse, stask.getcType().name(),ifInput);
 			if(tmpRow.getId()==-1) {//没有不满的
 				tmpRow=getBlankOrFullPostion(ifRaw, warehouse,stask.getcType().name(),ifInput);
 				if(tmpRow.getId()==-1) {//没有内部空位
@@ -95,9 +104,27 @@ public class Situation {
 				}
 			}
 			stask.setEnd(tmpRow.getId());
-			lockRow(tmpRow.getId());
+//			lockRow(tmpRow.getId());
+			CraneTask now=new CraneTask();
+			now.setTask(stask);
+			craneTasks.add(now);
 		}
-		return storageTasks;
+		Collections.sort(craneTasks,new CraneTask());
+		return craneTasks;
+	}
+	
+	
+	/**
+	 * @param craneTask 输入多个天车任务，没有具体分配
+	 * @return 做出具体的最佳分配结果
+	 */
+	public List<CraneTask> craneTaskDecide(List<CraneTask> craneTask){
+		int n=craneTask.size();
+		for(int i=0;i< Math.pow(2, n);i++) {
+			String code=(Integer.toBinaryString(i)+"00000000").substring(0, n);
+			System.out.println(code);
+		}
+		return craneTask;
 	}
 	
 	public RowInfo getBreakPosition(boolean ifRaw,int warehouse,String ctype,boolean ifInput) throws SQLException, ClassNotFoundException {
@@ -143,7 +170,7 @@ public class Situation {
 		prmt.setString(2, ifInput?"I":"O");
 		prmt.setInt(3, warehouse);
 		prmt.setString(4, "%"+ctype+"%");
-		prmt.setString(5, ifInput?null:(ifRaw?"G":"B"));
+		prmt.setString(5, ifInput?"":(ifRaw?"G":"B"));
 		ResultSet r=prmt.executeQuery();
 		while(r.next()){
 			row.setId(r.getInt("row_id"));

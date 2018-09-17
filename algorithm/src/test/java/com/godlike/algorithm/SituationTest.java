@@ -8,6 +8,7 @@ import com.godlike.algorithm.caculate.Situation;
 import com.godlike.algorithm.configure.SystemConfigure;
 import com.godlike.algorithm.exception.MyException;
 import com.godlike.algorithm.model.CBlockType;
+import com.godlike.algorithm.model.CraneTask;
 import com.godlike.algorithm.model.StorageTask;
 import com.godlike.algorithm.model.StorageTask.TaskType;
 
@@ -20,21 +21,32 @@ public class SituationTest extends TestCase {
     {
     	Situation s=new Situation();
     	StorageTask task1=new StorageTask();
-    	task1.setType(TaskType.RAWOFFLINE);
+    	task1.setType(TaskType.MATUREOFFLINE);
     	task1.setcType(CBlockType.A);
     	StorageTask task2=new StorageTask();
-    	task2.setType(TaskType.MATUREOFFLINE);
+    	task2.setType(TaskType.RAWOFFLINE);
     	task2.setcType(CBlockType.A);
+    	StorageTask task3=new StorageTask();
+    	task3.setType(TaskType.MATUREOUT);
+    	task3.setcType(CBlockType.A);
+    	StorageTask task4=new StorageTask();
+    	task4.setType(TaskType.RAWFIRE);
+    	task4.setcType(CBlockType.A);
     	List<StorageTask>pretasks=new ArrayList<StorageTask>();
     	pretasks.add(task1);
     	pretasks.add(task2);
-    	SystemConfigure.storage1Account=0;
-    	SystemConfigure.storage2Account=1;
-    	
+    	pretasks.add(task3);
+    	pretasks.add(task4);
         try {
-        	List<StorageTask> tasks=s.storageTaskMakeUp(pretasks);
-			assertEquals(1, tasks.get(0).getEnd());
-			assertEquals(0, tasks.get(1).getEnd());
+        	List<CraneTask> tasks=s.storageTaskMakeUp(pretasks);
+/*        	for(CraneTask tk:tasks) {
+        		System.out.println(tk.getTask().getType());
+        	}*/
+			assertEquals(TaskType.RAWOFFLINE, tasks.get(0).getTask().getType());
+			assertEquals(TaskType.MATUREOFFLINE, tasks.get(1).getTask().getType());
+			assertEquals(TaskType.RAWFIRE, tasks.get(2).getTask().getType());
+			assertEquals(TaskType.MATUREOUT, tasks.get(3).getTask().getType());
+			s.craneTaskDecide(tasks);
 		} catch (ClassNotFoundException e) {
 			System.out.println("jdbc driver not found");
 		} catch (SQLException e) {

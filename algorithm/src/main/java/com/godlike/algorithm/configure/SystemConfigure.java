@@ -13,7 +13,7 @@ import com.godlike.algorithm.model.StorageTask;
 public class SystemConfigure {
 	public static int craneSpeed;
 	public static int restLocation;
-	public static int[][] fireHouseLocation=new int[][]{{0,0},{0,0}};//焙烧车间I，II分别的上下线位置
+	public static int[][] fireHouseLocation=new int[][]{{20,35},{20,35}};//焙烧车间I，II分别的上下线位置
 	public static int[] rawBlockCrane=new int[]{0,3};
 	public static int[] matureBlockCrane=new int[]{1,2};
 	public static int storage1Account=10;

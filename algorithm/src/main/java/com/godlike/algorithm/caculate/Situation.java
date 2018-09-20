@@ -9,7 +9,18 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import org.bytedeco.javacpp.opencv_core;
+import org.bytedeco.javacpp.opencv_core.Mat;
+import org.bytedeco.javacpp.opencv_core.MatVector;
+import org.bytedeco.javacpp.opencv_core.Point;
+import org.bytedeco.javacpp.opencv_core.Scalar;
+import org.bytedeco.javacpp.opencv_core.Size;
+import org.bytedeco.javacpp.opencv_highgui;
+import org.bytedeco.javacpp.opencv_imgproc;
 
 import com.godlike.algorithm.configure.SystemConfigure;
 import com.godlike.algorithm.exception.MyException;
@@ -36,11 +47,13 @@ public class Situation {
 	
 	/**
 	 * @param storageTasks 可同时输入多个仓储相关任务
-	 * @return 完善后的天车任务，自动补充了起点终点等，计划任务之后对row进行锁定
+	 * @return 完善后的两个工区的天车任务，自动补充了起点终点等，计划任务之后对row进行锁定
 	 * @throws Exception
 	 */
-	public List<CraneTask> storageTaskMakeUp(List<StorageTask> storageTasks) throws Exception{
-		List<CraneTask> craneTasks=new ArrayList<>();
+	public Map<Integer, List<CraneTask>>  storageTaskMakeUp(List<StorageTask> storageTasks) throws Exception{
+		Map<Integer,List<CraneTask>> craneTaskList=new HashMap<>();
+		List<CraneTask> craneATasks=new ArrayList<CraneTask>();
+		List<CraneTask> craneBTasks=new ArrayList<CraneTask>();
 		for(StorageTask stask:storageTasks) {
 			boolean ifInput;
 			boolean ifRaw;
@@ -104,27 +117,138 @@ public class Situation {
 				}
 			}
 			stask.setEnd(tmpRow.getId());
-//			lockRow(tmpRow.getId());
+			stask.setSubWarehouse(warehouse);
+			lockRow(tmpRow.getId());
 			CraneTask now=new CraneTask();
 			now.setTask(stask);
-			craneTasks.add(now);
+			if(now.getTask().getSubWarehouse()==0) {
+				craneATasks.add(now);
+			}else if(now.getTask().getSubWarehouse()==1) {
+				craneBTasks.add(now);
+			}
+			
 		}
-		Collections.sort(craneTasks,new CraneTask());
-		return craneTasks;
+		Collections.sort(craneATasks,new CraneTask());
+		Collections.sort(craneBTasks,new CraneTask());
+		craneTaskList.put(0, craneATasks);
+		craneTaskList.put(1, craneBTasks);
+		return craneTaskList;
 	}
 	
 	
 	/**
 	 * @param craneTask 输入多个天车任务，没有具体分配
+	 * @param cranesLocation 系统中多个天车的位置，入0分库的1号天车在100Row处，则为cranesLocation[0][1]=100
 	 * @return 做出具体的最佳分配结果
 	 */
-	public List<CraneTask> craneTaskDecide(List<CraneTask> craneTask){
+	public Map<Integer,List<CraneTask>> craneTaskDecide(List<CraneTask> craneTask,int[][] cranesLocation){
+		List<CraneTask> craneATask=new ArrayList<>();
+		List<CraneTask> craneBTask=new ArrayList<>();
+		List<CraneTask> craneATaskFinal=new ArrayList<>();
+		List<CraneTask> craneBTaskFinal=new ArrayList<>();
+		int minPath=0;
 		int n=craneTask.size();
 		for(int i=0;i< Math.pow(2, n);i++) {
 			String code=(Integer.toBinaryString(i)+"00000000").substring(0, n);
-			System.out.println(code);
+			craneATask.clear();
+			craneBTask.clear();
+			for(int k=0;k<code.length();k++) {
+				if('0'==code.charAt(k)) {
+					craneATask.add(craneTask.get(k));
+				}else {
+					craneBTask.add(craneTask.get(k));
+				}
+			}
+//			if(!ifCross(craneATask, craneBTask, cranesLocation)) {
+			if(true) {
+				ifCross(craneATask, craneBTask, cranesLocation);
+				minPath=pathLengthAll(craneATask, craneBTask, cranesLocation);
+				craneATaskFinal=craneATask;
+				craneBTaskFinal=craneBTask;
+				System.out.println(minPath);
+			}
 		}
-		return craneTask;
+		Map<Integer,List<CraneTask>> craneTaskList=new HashMap<>();
+		craneTaskList.put(0, craneATaskFinal);
+		craneTaskList.put(1, craneBTaskFinal);
+		return craneTaskList;
+	}
+	
+	/**
+	 * @param craneATask A天车任务
+	 * @param craneBTask B天车任务
+	 * @param cranesLocation 系统中多个天车的位置，入0分库的1号天车在100Row处，则为cranesLocation[0][1]=100
+	 * @return 路径是否交错
+	 */
+	private boolean ifCross(List<CraneTask> craneATask,List<CraneTask> craneBTask,int[][] cranesLocation) {
+		boolean rtv=false;
+		int subWarehouse=craneATask.size()>0?craneATask.get(0).getTask().getSubWarehouse():craneBTask.get(0).getTask().getSubWarehouse();
+		opencv_highgui window=new opencv_highgui();
+		Mat image=new Mat(new Size(800,800),opencv_core.CV_8UC3);
+		int time0=0;
+		int time1=0;
+		for(int i=0;i<craneATask.size();i++) {
+			int timeMiddle=5;
+			opencv_imgproc.line(image, 
+					new Point(10*time0, i==0?10*cranesLocation[subWarehouse][0]:10*craneATask.get(i-1).getTask().getEnd()), 
+					new Point(10*(time0+timeMiddle), 10*craneATask.get(i).getTask().getStart()), 
+					new Scalar(0, 0, 255, 0),2,0,0);
+			time0+=timeMiddle;
+			opencv_imgproc.line(image, 
+					new Point(10*time0, 10*craneATask.get(i).getTask().getStart()), 
+					new Point(10*(time0+craneATask.get(i).getTimeUse()), 10*craneATask.get(i).getTask().getEnd()), 
+					new Scalar(0, 0, 255, 0),2,0,0);
+			time0+=craneATask.get(i).getTimeUse();
+		}
+		for(int i=0;i<craneBTask.size();i++) {
+			int timeMiddle=5;
+			opencv_imgproc.line(image, 
+					new Point(10*time1, i==0?10*cranesLocation[subWarehouse][0]:10*craneBTask.get(i-1).getTask().getEnd()), 
+					new Point(10*(time1+timeMiddle), 10*craneBTask.get(i).getTask().getStart()), 
+					new Scalar(0, 255, 0, 0),2,0,0);
+			time1+=timeMiddle;
+			opencv_imgproc.line(image, 
+					new Point(10*time1, 10*craneBTask.get(i).getTask().getStart()), 
+					new Point(10*(time1+craneBTask.get(i).getTimeUse()), 10*craneBTask.get(i).getTask().getEnd()), 
+					new Scalar(0, 255, 0, 0),2,0,0);
+			time1+=craneBTask.get(i).getTimeUse();
+		}
+		Mat tmp=image.clone();
+		Mat t=new Mat(tmp.size(), opencv_core.CV_32SC1);
+		opencv_imgproc.cvtColor(tmp, tmp, opencv_imgproc.COLOR_RGB2GRAY);
+		opencv_imgproc.threshold(tmp, tmp, 12, 255, opencv_imgproc.THRESH_BINARY);
+		opencv_imgproc.erode(tmp,tmp, 
+				opencv_imgproc.getStructuringElement(opencv_imgproc.MORPH_ERODE, new Size(5,5)));
+		opencv_imgproc.Canny(tmp, tmp, 50, 100);
+		MatVector tmpContours=new MatVector();
+		opencv_imgproc.findContours(tmp, tmpContours, opencv_imgproc.CHAIN_APPROX_SIMPLE,opencv_imgproc.CHAIN_APPROX_NONE);
+		for(int i=0;i<tmpContours.size();i++) {
+			opencv_imgproc.drawContours(image, tmpContours, i, new Scalar(0, 0, 0, 255));
+		}
+		window.imshow(tmpContours.size()+"个", image);
+		window.waitKey();
+		rtv=tmpContours.size()>0?true:false;
+		return rtv;
+	} 
+	
+	/**
+	 * @param craneATask A天车任务
+	 * @param craneBTask B天车任务
+	 * @param cranesLocation 系统中多个天车的位置，入0分库的1号天车在100Row处，则为cranesLocation[0][1]=100
+	 * @return 总体路径之和
+	 */
+	private int pathLengthAll(List<CraneTask> craneATask,List<CraneTask> craneBTask,int[][] cranesLocation) {
+		int subWarehouse=craneATask.size()>0?craneATask.get(0).getTask().getSubWarehouse():craneBTask.get(0).getTask().getSubWarehouse();
+		int rtv=0;
+		for(int i=0;i<craneATask.size();i++) {
+			rtv+=Math.abs(craneATask.get(i).getTask().getStart()-(i==0?cranesLocation[subWarehouse][0]:craneATask.get(i-1).getTask().getEnd()));
+			rtv+=Math.abs(craneATask.get(i).getTask().getEnd()-craneATask.get(i).getTask().getStart());
+		}
+		for(int i=0;i<craneBTask.size();i++) {
+			rtv+=Math.abs(craneBTask.get(i).getTask().getStart()-(i==0?cranesLocation[subWarehouse][1]:craneBTask.get(i-1).getTask().getEnd()));
+			rtv+=Math.abs(craneBTask.get(i).getTask().getEnd()-craneBTask.get(i).getTask().getStart());
+		}
+		return rtv;
 	}
 	
 	public RowInfo getBreakPosition(boolean ifRaw,int warehouse,String ctype,boolean ifInput) throws SQLException, ClassNotFoundException {

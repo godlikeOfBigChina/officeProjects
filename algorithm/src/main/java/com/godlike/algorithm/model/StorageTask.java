@@ -20,6 +20,7 @@ public class StorageTask {
 	private int count;
 	private int start;
 	private int end;
+	private int subWarehouse;
 	
 	public CBlockType getcType() {
 		return cType;
@@ -50,6 +51,12 @@ public class StorageTask {
 	}
 	public void setType(TaskType type) {
 		this.type = type;
+	}
+	public int getSubWarehouse() {
+		return subWarehouse;
+	}
+	public void setSubWarehouse(int subWarehouse) {
+		this.subWarehouse = subWarehouse;
 	}
 	
 	
